@@ -67,6 +67,7 @@ def svm_loss_vectorized(W, X, y, reg):
   Inputs and outputs are the same as svm_loss_naive.
   """
   loss = 0.0
+  num_train = X.shape[0]
   dW = np.zeros(W.shape) # initialize the gradient as zero
 
   #############################################################################
@@ -75,6 +76,22 @@ def svm_loss_vectorized(W, X, y, reg):
   # result in loss.                                                           #
   #############################################################################
   #pass
+  scores = X.dot(W)
+  sj = scores[np.arange(scores.shape[0]),y]
+  margin = np.maximum(0,scores - np.matrix(sj).T + 1)
+  margin[np.arange(num_train),y] = 0
+  binary = margin
+  binary[margin>0] = 1
+  row_sum = np.sum(binary,axis=1)
+  binary[np.arange(num_train),y]  = -row_sum.T
+  #print(margin)
+  loss = np.mean(np.sum(margin,axis=1))
+  loss += reg * np.sum(W * W)
+  dW = (X.T).dot(binary)
+  dW /= num_train
+  dW += reg * W
+
+ 
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
@@ -89,7 +106,7 @@ def svm_loss_vectorized(W, X, y, reg):
   # to reuse some of the intermediate values that you used to compute the     #
   # loss.                                                                     #
   #############################################################################
-  pass
+  #7pass
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
