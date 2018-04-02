@@ -1,6 +1,6 @@
 from builtins import range
 import numpy as np
-
+from cs231n.im2col import *
 
 def affine_forward(x, w, b):
     """
@@ -423,11 +423,30 @@ def conv_forward_naive(x, w, b, conv_param):
     # TODO: Implement the convolutional forward pass.                         #
     # Hint: you can use the function np.pad for padding.                      #
     ###########################################################################
-    pass
+    #pad_x = np.pad(x,(conv_param['pad']),'constant', constant_values=(0))
+    N, C, H, W = x.shape
+    F, C, HH, WW = w.shape
+    pad = conv_param['pad']
+    stride = conv_param['stride']
+    H_ = 1 + int((H + 2 * pad - HH) / stride)
+    W_ = 1 + int((W + 2 * pad - WW) / stride)
+    out = np.zeros((N, F, H_, W_),dtype=x.dtype) 
+    # Let this be 3x3 convolution with stride = 1 and padding = 1
+    # Suppose our X is 5x1x10x10, X_col will be a 9x500 matrix
+    X_col = im2col_indices(x, HH, WW, padding=pad, stride=stride)
+    # Suppose we have 20 of 3x3 filter: 20x1x3x3. W_col will be 20x9 matrix
+    W_col = w.reshape(F, -1)
+    # 20x9 x 9x500 = 20x500
+    out = np.dot(W_col,X_col) + b[:, np.newaxis]
+    # Reshape back from 20x500 to 5x20x10x10
+    # i.e. for each of our 5 images, we have 20 results with size of 10x10
+    out = out.reshape(F, H_, W_, N)
+    out = out.transpose(3, 0, 1, 2)
+    #pass
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
-    cache = (x, w, b, conv_param)
+    cache = (x, w, b, conv_param, X_col)
     return out, cache
 
 
@@ -448,7 +467,17 @@ def conv_backward_naive(dout, cache):
     ###########################################################################
     # TODO: Implement the convolutional backward pass.                        #
     ###########################################################################
-    pass
+    #pass
+    x, w, b, conv_param, x_cols = cache
+    pad, stride = conv_param['pad'], conv_param['stride']
+    N, C, H, W = x.shape
+    F, C, HH, WW = w.shape
+    N, F, H_, W_ = dout.shape
+    db = np.sum(dout, axis=(0, 2, 3))
+    dout_reshape = np.reshape(dout.transpose(1,2,3,0), (F, -1))
+    dw = dout_reshape.dot(x_cols.T).reshape(w.shape)
+    dx_cols = w.reshape(F, -1).T.dot(dout_reshape)
+    dx = col2im_indices(dx_cols, x.shape, field_height=HH, field_width=WW, padding=pad, stride=stride)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -474,11 +503,26 @@ def max_pool_forward_naive(x, pool_param):
     ###########################################################################
     # TODO: Implement the max pooling forward pass                            #
     ###########################################################################
-    pass
+    #pass
+    N, C, H, W = x.shape
+    Fh = pool_param['pool_height']
+    Fw = pool_param['pool_width']
+    stride = pool_param['stride']
+    Wout = int(1 + (W - Fw)/stride)
+    Hout = int(1 + (H - Fh)/stride)
+    out= np.zeros((N, C, Hout, Wout))
+    x_ = x.reshape(N * C, 1, H, W)
+    x_col = im2col_indices(x_, Fh, Fw, padding=0, stride=stride)
+    maxidx = np.argmax(x_col, axis=0)
+    out = x_col[maxidx, range(maxidx.size)] 
+    #out = np.max(x_col,axis=0)
+    #out = out[:,np.newaxis]
+    out = out.reshape(Hout, Wout, N, C)
+    out = out.transpose(2, 3, 0, 1)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
-    cache = (x, pool_param)
+    cache = (x, pool_param, x_col, maxidx)
     return out, cache
 
 
@@ -497,7 +541,17 @@ def max_pool_backward_naive(dout, cache):
     ###########################################################################
     # TODO: Implement the max pooling backward pass                           #
     ###########################################################################
-    pass
+    #pass
+    (x, pool_param, x_col, maxidx) = cache
+    N, C, H, W = x.shape
+    Fh = pool_param['pool_height']
+    Fw = pool_param['pool_width']
+    stride = pool_param['stride']
+    dx_cols = np.zeros((x_col.shape))
+    dout_flat = dout.transpose(2,3,0,1).ravel()
+    dx_cols[maxidx, range(maxidx.size)] = dout_flat
+    dx = col2im_indices(dx_cols, (N * C, 1, H, W), Fh, Fw, padding=0, stride=stride)
+    dx = dx.reshape(x.shape)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -535,7 +589,10 @@ def spatial_batchnorm_forward(x, gamma, beta, bn_param):
     # version of batch normalization defined above. Your implementation should#
     # be very short; ours is less than five lines.                            #
     ###########################################################################
-    pass
+    #pass
+    N, C, H, W = x.shape
+    out, cache = batchnorm_forward(x.transpose(0,3,2,1).reshape((N*W*H,C)), gamma,  beta, bn_param)
+    out = out.reshape(N,W,H,C).transpose(0,3,2,1)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -565,7 +622,10 @@ def spatial_batchnorm_backward(dout, cache):
     # version of batch normalization defined above. Your implementation should#
     # be very short; ours is less than five lines.                            #
     ###########################################################################
-    pass
+    #pass
+    N, C, H, W = dout.shape
+    dx,dgamma,dbeta = batchnorm_backward_alt(dout.transpose(0,3,2,1).reshape(N*W*H,C), cache)
+    dx = dx.reshape(N,W,H,C).transpose(0,3,2,1)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
